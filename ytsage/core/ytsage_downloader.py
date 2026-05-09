@@ -85,7 +85,7 @@ class DownloadThread(QThread):
         preferred_output_format="mp4",
         force_audio_format=False,
         preferred_audio_format="best",
-        increase_audio_volume=False,
+        audio_normalization=False,
         filename_format=None,
     ) -> None:
         super().__init__()
@@ -114,7 +114,7 @@ class DownloadThread(QThread):
         self.preferred_output_format = preferred_output_format
         self.force_audio_format = force_audio_format
         self.preferred_audio_format = preferred_audio_format
-        self.increase_audio_volume = increase_audio_volume
+        self.audio_normalization = audio_normalization
         self.filename_format = filename_format
         self.paused: bool = False
         self.cancelled: bool = False
@@ -288,6 +288,15 @@ class DownloadThread(QThread):
             else:
                 logger.debug("Using --extract-audio with best quality (no conversion) for audio-only download")
 
+        # Audio normalization uses a dedicated FFmpeg post-process after yt-dlp completes.
+        # Ensure audio-only downloads are extracted to a real audio file first.
+        if self.audio_normalization and self.is_audio_only:
+            if not self.force_audio_format or self.preferred_audio_format == "best":
+                if "--extract-audio" not in cmd:
+                    cmd.append("--extract-audio")
+                cmd.extend(["--audio-format", "mp3"])
+                logger.debug("Forced audio format to mp3 since normalization requires re-encoding")
+
         # Output template with resolution in filename
         # Use string concatenation instead of Path.joinpath to avoid Path object issues
         base_path: str = self.path.as_posix()
@@ -460,7 +469,7 @@ class DownloadThread(QThread):
 
     def _increase_audio_loudness(self) -> bool:
         """Normalize audio loudness with two-pass voice tuning and limit peaks."""
-        if not self.is_audio_only or not self.increase_audio_volume or self.cancelled:
+        if not self.is_audio_only or not self.audio_normalization or self.cancelled:
             return True
 
         recent_audio_files = self._collect_recent_audio_files()

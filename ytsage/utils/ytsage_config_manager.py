@@ -71,6 +71,7 @@ class ConfigManager:
     _settings: Dict[str, Any] = {}
     _default_config: Dict[str, Any] = {
         "download_path": str(USER_HOME_DIR / "Downloads"),
+        "generic_mode": False,
         "speed_limit_value": None,
         "speed_limit_unit_index": 0,
         "cookie_source": "browser",  # "browser" or "file"
@@ -83,6 +84,7 @@ class ConfigManager:
         "geo_proxy_url": None,
         "auto_update_ytdlp": True,
         "auto_update_frequency": "daily",
+        "check_app_updates": True,
         "check_beta_updates": False,
         "last_update_check": 0,
         "language": "en",
@@ -91,7 +93,7 @@ class ConfigManager:
         "preferred_output_format": "mp4",
         "force_audio_format": False,
         "preferred_audio_format": "best",
-        "increase_audio_volume": False,
+        "audio_normalization": False,
         "filename_format": "%(title)s_%(resolution)s.%(ext)s",
         "cached_versions": {
             "ytdlp": {"version": None, "path": None, "last_check": 0, "path_mtime": 0},

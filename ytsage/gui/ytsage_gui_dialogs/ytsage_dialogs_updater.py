@@ -445,6 +445,33 @@ class UpdaterTabWidget(QWidget):
         # === App Updates Section ===
         app_update_group = QGroupBox(_("settings.app_updates_title"))
         app_update_layout = QVBoxLayout()
+
+        self.app_updates_checkbox = QCheckBox(_("settings.check_app_updates"))
+        self.app_updates_checkbox.setStyleSheet(
+            """
+            QCheckBox {
+                color: #ffffff;
+                spacing: 5px;
+                padding: 3px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 2px solid #666666;
+                background: #1d1e22;
+                border-radius: 9px;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #c90000;
+                background: #c90000;
+                border-radius: 9px;
+            }
+            """
+        )
+        app_update_layout.addWidget(self.app_updates_checkbox)
         
         self.beta_updates_checkbox = QCheckBox(_("settings.check_beta_updates"))
         self.beta_updates_checkbox.setStyleSheet(
@@ -655,6 +682,10 @@ class UpdaterTabWidget(QWidget):
             # Load beta setting
             beta_enabled = ConfigManager.get("check_beta_updates") or False
             self.beta_updates_checkbox.setChecked(beta_enabled)
+
+            # Load app update checker setting (default enabled for older configs)
+            app_updates_enabled = ConfigManager.get("check_app_updates")
+            self.app_updates_checkbox.setChecked(app_updates_enabled is not False)
             
             # Set current selection based on saved settings
             current_frequency = auto_settings["frequency"]
@@ -697,6 +728,10 @@ class UpdaterTabWidget(QWidget):
     def get_beta_update_setting(self) -> bool:
         """Returns the beta update setting from the dialog."""
         return self.beta_updates_checkbox.isChecked()
+
+    def get_app_update_checker_setting(self) -> bool:
+        """Returns the app version checker setting from the dialog."""
+        return self.app_updates_checkbox.isChecked()
     
     def _on_channel_changed(self, checked: bool) -> None:
         """Handle channel selection change."""

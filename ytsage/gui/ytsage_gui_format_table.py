@@ -207,7 +207,7 @@ class FormatTableMixin:
         audio_formats = [
             f
             for f in self.all_formats
-            if (f.get("vcodec") == "none" or "audio only" in f.get("format_note", "").lower())
+            if (f.get("vcodec") == "none" or "audio only" in str(f.get("format_note") or "").lower())
             and f.get("acodec") != "none"
             and f.get("filesize") is not None
         ]
@@ -224,7 +224,8 @@ class FormatTableMixin:
                 except (ValueError, IndexError):
                     return 0
             else:
-                return f.get("abr", 0)
+                abr = f.get("abr") or 0
+                return abr if isinstance(abr, (int, float)) else 0
 
         video_formats.sort(key=get_quality, reverse=True)
         audio_formats.sort(key=get_quality, reverse=True)
@@ -320,7 +321,9 @@ class FormatTableMixin:
             self.format_table.setItem(row, 1, quality_item)
 
             # Resolution
-            resolution = f.get("resolution", "N/A")
+            resolution = f.get("resolution") or "N/A"
+            if not isinstance(resolution, str):
+                resolution = str(resolution)
 
             if is_playlist_mode:
                 # Column 2 for playlist mode: Resolution
@@ -361,7 +364,8 @@ class FormatTableMixin:
                 self.format_table.setItem(row, 4, hdr_item)
             else:
                 # Extension for normal mode (column 2)
-                self.format_table.setItem(row, 2, QTableWidgetItem(f.get("ext", "").upper()))
+                extension = str(f.get("ext") or "")
+                self.format_table.setItem(row, 2, QTableWidgetItem(extension.upper()))
 
             # Audio Status column
             needs_audio = f.get("acodec") == "none" and f.get("vcodec") != "none"
@@ -387,11 +391,11 @@ class FormatTableMixin:
 
                 # Column 5: Codec
                 if f.get("vcodec") == "none":
-                    codec = f.get("acodec", "N/A")
+                    codec = str(f.get("acodec") or "N/A")
                 else:
-                    codec = f"{f.get('vcodec', 'N/A')}"
+                    codec = str(f.get("vcodec") or "N/A")
                     if f.get("acodec") != "none":
-                        codec += f" / {f.get('acodec', 'N/A')}"
+                        codec += f" / {str(f.get('acodec') or 'N/A')}"
                 self.format_table.setItem(row, 5, QTableWidgetItem(codec))
 
                 # Column 7: FPS (Frame Rate)
@@ -469,7 +473,9 @@ class FormatTableMixin:
         
         if format_info.get("vcodec") == "none":
             # Audio quality
-            abr = format_info.get("abr", 0)
+            abr = format_info.get("abr") or 0
+            if not isinstance(abr, (int, float)):
+                abr = 0
             if abr >= 256:
                 return _("formats.best_audio")
             elif abr >= 192:

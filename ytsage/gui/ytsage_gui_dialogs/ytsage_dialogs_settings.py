@@ -26,8 +26,10 @@ from PySide6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QVBoxLayout,
+    QWidget,
 )
 
+from ..ytsage_smooth_tab_widget import SmoothTabWidget
 from ...utils.ytsage_logger import logger
 from ...utils.ytsage_localization import _
 from ...utils.ytsage_config_manager import ConfigManager
@@ -38,7 +40,7 @@ class DownloadSettingsDialog(QDialog):
     def __init__(self, current_path, current_limit, current_unit_index, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(_("settings.title"))
-        self.setMinimumWidth(450)
+        self.setMinimumWidth(550)
         self.setMinimumHeight(400)
         self.current_path = current_path
         self.current_limit = current_limit if current_limit is not None else ""
@@ -49,7 +51,25 @@ class DownloadSettingsDialog(QDialog):
             """
             QDialog {
                 background-color: #15181b;
+            }
+            QFrame#tabContent {
+                border: 1px solid #3d3d3d;
+                background-color: #15181b;
+            }
+            QTabBar::tab {
+                background-color: #1d1e22;
                 color: #ffffff;
+                padding: 8px 12px;
+                border: 1px solid #3d3d3d;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }
+            QTabBar::tab:selected {
+                background-color: #c90000;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #2a2d36;
             }
             QWidget {
                 background-color: #15181b;
@@ -59,18 +79,17 @@ class DownloadSettingsDialog(QDialog):
                 color: #ffffff;
             }
             QGroupBox {
-                color: #ffffff;
-                border: 2px solid #1b2021;
+                border: 1px solid #3d3d3d;
                 border-radius: 4px;
-                margin-top: 10px;
-                padding-top: 10px;
+                margin-top: 1.5ex;
+                color: #ffffff;
+                padding: 10px;
                 font-weight: bold;
-                background-color: #15181b;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
+                subcontrol-position: top left;
+                padding: 0 5px;
                 color: #ffffff;
             }
             QLineEdit {
@@ -112,11 +131,13 @@ class DownloadSettingsDialog(QDialog):
             }
             QCheckBox::indicator:unchecked {
                 border: 2px solid #666666;
-                background: #15181b;
+                background: #1d1e22;
+                border-radius: 9px;
             }
             QCheckBox::indicator:checked {
                 border: 2px solid #c90000;
                 background: #c90000;
+                border-radius: 9px;
             }
             QRadioButton {
                 spacing: 5px;
@@ -129,36 +150,49 @@ class DownloadSettingsDialog(QDialog):
             }
             QRadioButton::indicator:unchecked {
                 border: 2px solid #666666;
-                background: #15181b;
+                background: #1d1e22;
+                border-radius: 9px;
             }
             QRadioButton::indicator:checked {
                 border: 2px solid #c90000;
                 background: #c90000;
+                border-radius: 9px;
             }
             QComboBox {
-                padding: 5px;
+                padding: 8px;
                 border: 2px solid #1b2021;
                 border-radius: 4px;
                 background-color: #1b2021;
                 color: #ffffff;
-                min-height: 20px;
+                min-width: 150px;
             }
             QComboBox::drop-down {
                 border: none;
                 width: 20px;
             }
+            QComboBox::down-arrow {
+                border: none;
+                width: 12px;
+                height: 12px;
+            }
             QComboBox QAbstractItemView {
-                border: 2px solid #1b2021;
-                border-radius: 4px;
-                background-color: #15181b;
+                background-color: #1d1e22;
                 color: #ffffff;
+                border: 1px solid #3d3d3d;
                 selection-background-color: #c90000;
-                selection-color: #ffffff;
             }
         """
         )
 
         layout = QVBoxLayout(self)
+
+        # Create tab widget
+        self.tab_widget = SmoothTabWidget()
+        layout.addWidget(self.tab_widget)
+
+        # === General Tab ===
+        general_tab = QWidget()
+        general_layout = QVBoxLayout(general_tab)
 
         # --- Download Path Section ---
         path_group_box = QGroupBox(_("settings.download_path"))
@@ -177,7 +211,7 @@ class DownloadSettingsDialog(QDialog):
         path_layout.addWidget(browse_button)
 
         path_group_box.setLayout(path_layout)
-        layout.addWidget(path_group_box)
+        general_layout.addWidget(path_group_box)
 
         # --- Speed Limit Section ---
         speed_group_box = QGroupBox(_("settings.speed_limit"))
@@ -193,7 +227,30 @@ class DownloadSettingsDialog(QDialog):
         speed_layout.addWidget(self.speed_limit_unit)
 
         speed_group_box.setLayout(speed_layout)
-        layout.addWidget(speed_group_box)
+        general_layout.addWidget(speed_group_box)
+
+        # --- Generic Mode Section ---
+        generic_mode_group_box = QGroupBox(_("settings.generic_mode"))
+        generic_mode_layout = QVBoxLayout()
+
+        self.generic_mode_enabled = ConfigManager.get("generic_mode") or False
+
+        self.generic_mode_checkbox = QCheckBox(_("settings.enable_generic_mode"))
+        self.generic_mode_checkbox.setChecked(self.generic_mode_enabled)
+        generic_mode_layout.addWidget(self.generic_mode_checkbox)
+
+        generic_mode_help_label = QLabel(_("settings.generic_mode_help"))
+        generic_mode_help_label.setWordWrap(True)
+        generic_mode_help_label.setStyleSheet("color: #cccccc; margin: 5px; font-size: 11px;")
+        generic_mode_layout.addWidget(generic_mode_help_label)
+
+        generic_mode_group_box.setLayout(generic_mode_layout)
+        general_layout.addWidget(generic_mode_group_box)
+        general_layout.addStretch()
+
+        # === Format Tab ===
+        format_tab = QWidget()
+        format_layout = QVBoxLayout(format_tab)
 
         # --- Output Format Settings Section ---
         output_format_group_box = QGroupBox(_("settings.output_format_settings"))
@@ -234,7 +291,7 @@ class DownloadSettingsDialog(QDialog):
         output_format_layout.addWidget(help_label)
 
         output_format_group_box.setLayout(output_format_layout)
-        layout.addWidget(output_format_group_box)
+        format_layout.addWidget(output_format_group_box)
 
         # --- Audio Format Settings Section (for audio-only downloads) ---
         audio_format_group_box = QGroupBox(_("settings.audio_format_settings"))
@@ -243,12 +300,23 @@ class DownloadSettingsDialog(QDialog):
         # Load current audio format settings from ConfigManager
         self.force_audio_format_enabled = ConfigManager.get("force_audio_format") or False
         self.preferred_audio_format_value = ConfigManager.get("preferred_audio_format") or "best"
-        self.increase_audio_volume_enabled = ConfigManager.get("increase_audio_volume") or False
+        self.audio_normalization_enabled = ConfigManager.get("audio_normalization") or False
 
         # Enable/Disable force audio format checkbox
         self.force_audio_format_checkbox = QCheckBox(_("settings.force_audio_format"))
         self.force_audio_format_checkbox.setChecked(self.force_audio_format_enabled)
         audio_format_layout.addWidget(self.force_audio_format_checkbox)
+
+        # Enable/Disable audio normalization checkbox
+        self.audio_normalization_checkbox = QCheckBox(_("settings.audio_normalization", default="Audio Normalization"))
+        self.audio_normalization_checkbox.setChecked(self.audio_normalization_enabled)
+        audio_format_layout.addWidget(self.audio_normalization_checkbox)
+
+        # Audio normalization help text
+        audio_norm_help_label = QLabel(_("settings.audio_normalization_help", default="When enabled, audio will be normalized using EBU R128 standard."))
+        audio_norm_help_label.setWordWrap(True)
+        audio_norm_help_label.setStyleSheet("color: #cccccc; margin: 5px; font-size: 11px;")
+        audio_format_layout.addWidget(audio_norm_help_label)
 
         # Audio format selection layout
         audio_format_select_layout = QHBoxLayout()
@@ -280,25 +348,25 @@ class DownloadSettingsDialog(QDialog):
         audio_help_label.setStyleSheet("color: #cccccc; margin: 5px; font-size: 11px;")
         audio_format_layout.addWidget(audio_help_label)
 
-        self.increase_audio_volume_checkbox = QCheckBox(_("settings.increase_audio_volume"))
-        self.increase_audio_volume_checkbox.setChecked(self.increase_audio_volume_enabled)
-        audio_format_layout.addWidget(self.increase_audio_volume_checkbox)
-
-        volume_help_label = QLabel(_("settings.increase_audio_volume_help"))
-        volume_help_label.setWordWrap(True)
-        volume_help_label.setStyleSheet("color: #cccccc; margin: 5px; font-size: 11px;")
-        audio_format_layout.addWidget(volume_help_label)
+        # Connect signals
+        self.audio_normalization_checkbox.stateChanged.connect(self._on_audio_normalization_toggled)
+        self.force_audio_format_checkbox.stateChanged.connect(self._on_force_audio_format_toggled)
 
         audio_format_group_box.setLayout(audio_format_layout)
-        layout.addWidget(audio_format_group_box)
+        format_layout.addWidget(audio_format_group_box)
+        format_layout.addStretch()
+
+        # === File Tab ===
+        file_tab = QWidget()
+        file_layout = QVBoxLayout(file_tab)
 
         # --- Filename Format Section ---
         filename_format_group_box = QGroupBox(_("settings.filename_format"))
         filename_layout = QVBoxLayout()
-        
+
         # Load current filename format from ConfigManager
         self.filename_format_value = ConfigManager.get("filename_format") or "%(title)s_%(resolution)s.%(ext)s"
-        
+
         # Input and Reset Button Layout
         filename_input_layout = QHBoxLayout()
 
@@ -319,7 +387,13 @@ class DownloadSettingsDialog(QDialog):
         filename_layout.addWidget(filename_help_label)
         
         filename_format_group_box.setLayout(filename_layout)
-        layout.addWidget(filename_format_group_box)
+        file_layout.addWidget(filename_format_group_box)
+        file_layout.addStretch()
+
+        # Add tabs to tab widget
+        self.tab_widget.addTab(general_tab, _("settings.tab_general", default="General"))
+        self.tab_widget.addTab(format_tab, _("settings.tab_format", default="Format"))
+        self.tab_widget.addTab(file_tab, _("settings.tab_file", default="File"))
 
         # Dialog buttons (OK/Cancel)
         button_box = QDialogButtonBox()
@@ -327,7 +401,44 @@ class DownloadSettingsDialog(QDialog):
         cancel_button = button_box.addButton(_("buttons.cancel"), QDialogButtonBox.ButtonRole.RejectRole)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+
+        # Style the buttons to look identical to Custom Options dialog
+        for btn in [ok_button, cancel_button]:
+            btn.setMinimumHeight(35)
+            btn.setMinimumWidth(80)
+            btn.setStyleSheet(
+                """
+                QPushButton {
+                    padding: 8px 20px;
+                    background-color: #c90000;
+                    border: none;
+                    border-radius: 4px;
+                    color: white;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #a50000;
+                }
+                """
+            )
+
         layout.addWidget(button_box)
+
+    def _on_audio_normalization_toggled(self, state: int) -> None:
+        """Handle logic when audio normalization is toggled."""
+        if state == Qt.CheckState.Checked.value:
+            # Normalization requires re-encoding, so we must force an audio format
+            self.force_audio_format_checkbox.setChecked(True)
+
+            # If 'Best (No conversion)' is selected, change it to MP3 to ensure re-encoding
+            if self.audio_format_combo.currentIndex() == 0:
+                self.audio_format_combo.setCurrentIndex(2)  # Index 2 is typically MP3
+
+    def _on_force_audio_format_toggled(self, state: int) -> None:
+        """Handle logic when force audio format is toggled."""
+        if state == Qt.CheckState.Unchecked.value:
+            # If re-encoding is disabled, normalization cannot happen
+            self.audio_normalization_checkbox.setChecked(False)
 
     def browse_new_path(self) -> None:
         new_path = QFileDialog.getExistingDirectory(self, _("dialogs.select_folder"), str(self.current_path))
@@ -359,6 +470,10 @@ class DownloadSettingsDialog(QDialog):
         """Returns whether force output format is enabled."""
         return self.force_format_checkbox.isChecked()
 
+    def get_generic_mode_enabled(self) -> bool:
+        """Returns whether generic mode is enabled."""
+        return self.generic_mode_checkbox.isChecked()
+
     def get_preferred_format(self) -> str:
         """Returns the selected preferred format (lowercase)."""
         format_map = {0: "mp4", 1: "webm", 2: "mkv"}
@@ -373,9 +488,9 @@ class DownloadSettingsDialog(QDialog):
         audio_format_map = {0: "best", 1: "aac", 2: "mp3", 3: "flac", 4: "wav", 5: "opus", 6: "m4a", 7: "vorbis"}
         return audio_format_map.get(self.audio_format_combo.currentIndex(), "best")
 
-    def get_increase_audio_volume_enabled(self) -> bool:
-        """Returns whether audio loudness boost is enabled."""
-        return self.increase_audio_volume_checkbox.isChecked()
+    def get_audio_normalization_enabled(self) -> bool:
+        """Returns whether audio normalization is enabled."""
+        return self.audio_normalization_checkbox.isChecked()
 
     def get_filename_format(self) -> str:
         """Returns the filename format string."""
@@ -419,6 +534,8 @@ class DownloadSettingsDialog(QDialog):
     def accept(self) -> None:
         """Override accept to save format settings."""
         try:
+            ConfigManager.set("generic_mode", self.get_generic_mode_enabled())
+
             # Save output format settings
             force_format = self.get_force_format_enabled()
             preferred_format = self.get_preferred_format()
@@ -428,9 +545,10 @@ class DownloadSettingsDialog(QDialog):
             # Save audio format settings
             force_audio_format = self.get_force_audio_format_enabled()
             preferred_audio_format = self.get_preferred_audio_format()
+            audio_normalization = self.get_audio_normalization_enabled()
             ConfigManager.set("force_audio_format", force_audio_format)
             ConfigManager.set("preferred_audio_format", preferred_audio_format)
-            ConfigManager.set("increase_audio_volume", self.get_increase_audio_volume_enabled())
+            ConfigManager.set("audio_normalization", audio_normalization)
 
             # Save filename format
             filename_format = self.get_filename_format()

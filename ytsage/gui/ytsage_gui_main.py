@@ -257,7 +257,8 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
         self.preferred_output_format = ConfigManager.get("preferred_output_format") or "mp4"
         self.force_audio_format = ConfigManager.get("force_audio_format") or False
         self.preferred_audio_format = ConfigManager.get("preferred_audio_format") or "best"
-        self.increase_audio_volume = ConfigManager.get("increase_audio_volume") or False
+        self.audio_normalization = ConfigManager.get("audio_normalization") or False
+        self.generic_mode_enabled = ConfigManager.get("generic_mode") or False
         # Track if video analysis is completed
         self.analysis_completed = False
 
@@ -352,7 +353,7 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
         url_layout.setSpacing(10)
         
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText(_("main_ui.url_placeholder"))
+        self._update_url_placeholder()
         self.url_input.returnPressed.connect(self.analyze_url)  # Analyze on Enter key
         self.url_input.textChanged.connect(self._on_url_text_changed)  # Enable/disable analyze button
         self.url_input.setMinimumHeight(42)
@@ -490,13 +491,7 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
         # --- Rename Path Button to Settings Button ---
         self.settings_button = QPushButton(_("buttons.download_settings"))  # Renamed button
         self.settings_button.clicked.connect(self.show_download_settings_dialog)  # Renamed method
-        self.settings_button.setToolTip(
-            _(
-                "main_ui.settings_tooltip",
-                path=self.last_path,
-                speed_limit=_("main_ui.speed_limit_none"),
-            )
-        )  # Update initial tooltip
+        self._update_settings_tooltip()
         # --- End Settings Button ---
 
         self.download_btn = QPushButton(_("buttons.download"))
@@ -582,6 +577,27 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
         """Enable or disable the Analyze button based on URL input content."""
         self.analyze_button.setEnabled(bool(text.strip()))
 
+    def _get_speed_limit_tooltip_text(self) -> str:
+        """Return the current speed limit string for the settings tooltip."""
+        if self.speed_limit_value:
+            return f"{self.speed_limit_value} {['KB/s', 'MB/s'][self.speed_limit_unit_index]}"
+        return _("main_ui.speed_limit_none")
+
+    def _update_settings_tooltip(self) -> None:
+        """Refresh the download settings tooltip text."""
+        self.settings_button.setToolTip(
+            _(
+                "main_ui.settings_tooltip",
+                path=self.last_path,
+                speed_limit=self._get_speed_limit_tooltip_text(),
+            )
+        )
+
+    def _update_url_placeholder(self) -> None:
+        """Update the URL placeholder based on the selected validation mode."""
+        placeholder_key = "main_ui.url_placeholder_generic" if self.generic_mode_enabled else "main_ui.url_placeholder"
+        self.url_input.setPlaceholderText(_(placeholder_key))
+
 
 
     def paste_url(self) -> None:
@@ -625,34 +641,29 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
             # Update Audio Format Settings
             new_force_audio_format = dialog.get_force_audio_format_enabled()
             new_preferred_audio_format = dialog.get_preferred_audio_format()
-            new_increase_audio_volume = dialog.get_increase_audio_volume_enabled()
+            new_audio_normalization = dialog.get_audio_normalization_enabled()
             audio_format_changed = False
-            if (
-                new_force_audio_format != self.force_audio_format
-                or new_preferred_audio_format != self.preferred_audio_format
-                or new_increase_audio_volume != self.increase_audio_volume
-            ):
+            if (new_force_audio_format != self.force_audio_format or
+                new_preferred_audio_format != self.preferred_audio_format or
+                new_audio_normalization != self.audio_normalization):
                 self.force_audio_format = new_force_audio_format
                 self.preferred_audio_format = new_preferred_audio_format
-                self.increase_audio_volume = new_increase_audio_volume
+                self.audio_normalization = new_audio_normalization
                 audio_format_changed = True
-                logger.info(
-                    f"Audio format settings updated - Force: {self.force_audio_format}, "
-                    f"Preferred: {self.preferred_audio_format}, Increase loudness: {self.increase_audio_volume}"
-                )
+                logger.info(f"Audio format settings updated - Force: {self.force_audio_format}, Preferred: {self.preferred_audio_format}, Norm: {self.audio_normalization}")
+
+            # Update Generic Mode Setting
+            new_generic_mode = dialog.get_generic_mode_enabled()
+            generic_mode_changed = False
+            if new_generic_mode != self.generic_mode_enabled:
+                self.generic_mode_enabled = new_generic_mode
+                generic_mode_changed = True
+                self._update_url_placeholder()
+                logger.info(f"Generic mode updated - Enabled: {self.generic_mode_enabled}")
 
             # Update Tooltip if anything changed
-            if path_changed or limit_changed or format_changed or audio_format_changed:
-                limit_text = _("main_ui.speed_limit_none")
-                if self.speed_limit_value:
-                    limit_text = f"{self.speed_limit_value} {['KB/s', 'MB/s'][self.speed_limit_unit_index]}"
-                self.settings_button.setToolTip(
-                    _(
-                        "main_ui.settings_tooltip",
-                        path=self.last_path,
-                        speed_limit=limit_text,
-                    )
-                )
+            if path_changed or limit_changed or format_changed or audio_format_changed or generic_mode_changed:
+                self._update_settings_tooltip()
 
     def start_download(self) -> None:
         if self.is_updating_ytdlp:
@@ -679,7 +690,7 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
         # --- End Path Change ---
         
         # Validate URL before starting download
-        is_valid, error_message = validate_video_url(url)
+        is_valid, error_message = validate_video_url(url, generic_mode=self.generic_mode_enabled)
         if not is_valid:
             QMessageBox.warning(self, _("main_ui.error_title"), error_message)
             self.animate_widget_shake(self.url_input)
@@ -772,7 +783,7 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
             preferred_output_format=self.preferred_output_format,  # Pass preferred format
             force_audio_format=self.force_audio_format,  # Pass force audio format setting
             preferred_audio_format=self.preferred_audio_format,  # Pass preferred audio format
-            increase_audio_volume=self.increase_audio_volume,  # Pass audio loudness boost setting
+            audio_normalization=self.audio_normalization,  # Pass audio normalization setting
             filename_format=filename_format,  # Pass the filename format
         )
 
@@ -953,6 +964,10 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
 
     def check_for_updates(self) -> None:
         """Starts the update check in a background thread."""
+        if ConfigManager.get("check_app_updates") is False:
+            logger.info("App version checker is disabled in settings.")
+            return
+
         self.update_thread = UpdateCheckThread(self.version)
         self.update_thread.update_available.connect(self.show_update_dialog)
         self.update_thread.start()
@@ -1768,4 +1783,3 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
             painter.drawRect(source_pixmap.rect())
 
         return result
-

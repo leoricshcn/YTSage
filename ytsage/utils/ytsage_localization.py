@@ -70,11 +70,27 @@ class LocalizationManager:
             "custom_options": "Custom Options",
             "settings": "Settings"
         },
+        "settings": {
+            "generic_mode": "Generic Mode",
+            "enable_generic_mode": "Enable Generic Mode (support non-YouTube sites)",
+            "generic_mode_help": "Allows downloading from Dailymotion, CBC Gem, and other sites supported by yt-dlp.",
+            "app_updates_title": "YTSage Updates",
+            "check_app_updates": "Check for YTSage updates on startup",
+            "check_beta_updates": "Receive Beta Updates",
+            "audio_normalization": "Audio Normalization (EBU R128)",
+            "audio_normalization_help": "When enabled, FFmpeg applies voice cleanup, two-pass loudness normalization, extra gain, and peak limiting to completed audio-only downloads."
+        },
         "tabs": {
             "cookies": "Login with Cookies",
             "custom_command": "Custom Command", 
             "proxy": "Proxy",
             "language": "Language"
+        },
+        "main_ui": {
+            "url_placeholder": "Enter YouTube video or playlist URL",
+            "url_placeholder_generic": "Enter video or playlist URL from any supported site",
+            "settings_tooltip": "Current Path: {path}\nSpeed Limit: {speed_limit}",
+            "speed_limit_none": "None"
         },
         "language": {
             "select_language": "Select Language:",
@@ -99,17 +115,13 @@ class LocalizationManager:
             "preparing": "🚀 Preparing your download...",
             "completed": "✅ Download completed!",
             "video_completed": "✅ Video download completed!",
-            "audio_completed": "✅ Audio download completed!", 
+            "audio_completed": "✅ Audio download completed!",
             "subtitle_completed": "✅ Subtitle download completed!",
             "boosting_audio": "🔊 Applying two-pass voice normalization...",
             "please_set_path": "Please set a download path using 'Change Path'",
             "please_enter_url": "Please enter a URL",
             "please_enter_url_and_path": "Please enter URL and set download path",
             "please_select_format": "Please select a format"
-        },
-        "settings": {
-            "increase_audio_volume": "Increase loudness",
-            "increase_audio_volume_help": "When enabled, FFmpeg uses the best available speech denoise chain (arnndn model when available), then applies aggressive two-pass speech/voice normalization, extra gain, and peak limiting to completed audio-only downloads."
         },
         "formats": {
             "show_formats": "Show formats:"

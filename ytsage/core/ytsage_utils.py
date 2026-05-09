@@ -731,7 +731,7 @@ def parse_yt_dlp_error(error_message: str) -> str:
     return _("ytdlp_errors.generic_error", error=error_message)
 
 
-def validate_video_url(url: str) -> tuple[bool, str]:
+def validate_video_url(url: str, generic_mode: bool = False) -> tuple[bool, str]:
     """
     Validate a video URL for supported platforms.
     
@@ -743,6 +743,10 @@ def validate_video_url(url: str) -> tuple[bool, str]:
         - is_valid: True if URL is valid, False otherwise
         - error_message: Empty string if valid, error description if invalid
         
+    Args:
+        url: URL entered by the user.
+        generic_mode: When True, allow any http/https URL with a valid domain.
+
     Example:
         >>> is_valid, error = validate_video_url("https://youtube.com/watch?v=xxx")
         >>> if not is_valid:
@@ -770,6 +774,10 @@ def validate_video_url(url: str) -> tuple[bool, str]:
     # Check if netloc (domain) exists
     if not parsed.netloc:
         return False, _("url_validation.missing_domain")
+
+    if generic_mode:
+        logger.info(f"Generic mode enabled, allowing URL: {url}")
+        return True, ""
     
     # YTSage focuses on YouTube and YouTube Music only
     # Supported YouTube domains

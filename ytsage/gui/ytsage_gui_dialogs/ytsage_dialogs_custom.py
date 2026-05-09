@@ -972,6 +972,11 @@ class CustomOptionsDialog(QDialog):
             ConfigManager.set("check_beta_updates", beta_enabled)
             logger.info(f"Saved beta updates setting: {beta_enabled}")
 
+            # Save app update checker setting
+            app_updates_enabled = self.updater_tab.get_app_update_checker_setting()
+            ConfigManager.set("check_app_updates", app_updates_enabled)
+            logger.info(f"Saved app updates checker setting: {app_updates_enabled}")
+
         except Exception as e:
             logger.exception(f"Error saving auto-update settings: {e}")
         

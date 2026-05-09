@@ -287,7 +287,7 @@ class AnalysisMixin:
             return
         
         # Validate URL before processing
-        is_valid, error_message = validate_video_url(url)
+        is_valid, error_message = validate_video_url(url, generic_mode=self.generic_mode_enabled)
         if not is_valid:
             QMessageBox.warning(self, _("main_ui.error_title"), error_message)
             if hasattr(self, "animate_widget_shake"):
