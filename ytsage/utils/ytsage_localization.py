@@ -101,10 +101,15 @@ class LocalizationManager:
             "video_completed": "✅ Video download completed!",
             "audio_completed": "✅ Audio download completed!", 
             "subtitle_completed": "✅ Subtitle download completed!",
+            "boosting_audio": "🔊 Applying two-pass voice normalization...",
             "please_set_path": "Please set a download path using 'Change Path'",
             "please_enter_url": "Please enter a URL",
             "please_enter_url_and_path": "Please enter URL and set download path",
             "please_select_format": "Please select a format"
+        },
+        "settings": {
+            "increase_audio_volume": "Increase loudness",
+            "increase_audio_volume_help": "When enabled, FFmpeg uses the best available speech denoise chain (arnndn model when available), then applies aggressive two-pass speech/voice normalization, extra gain, and peak limiting to completed audio-only downloads."
         },
         "formats": {
             "show_formats": "Show formats:"

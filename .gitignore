@@ -32,3 +32,5 @@ venv/
 # Test artifacts
 *.test
 *.tmp
+deb_pkg/
+scripts/

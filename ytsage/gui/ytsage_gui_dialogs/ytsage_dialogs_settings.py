@@ -243,6 +243,7 @@ class DownloadSettingsDialog(QDialog):
         # Load current audio format settings from ConfigManager
         self.force_audio_format_enabled = ConfigManager.get("force_audio_format") or False
         self.preferred_audio_format_value = ConfigManager.get("preferred_audio_format") or "best"
+        self.increase_audio_volume_enabled = ConfigManager.get("increase_audio_volume") or False
 
         # Enable/Disable force audio format checkbox
         self.force_audio_format_checkbox = QCheckBox(_("settings.force_audio_format"))
@@ -278,6 +279,15 @@ class DownloadSettingsDialog(QDialog):
         audio_help_label.setWordWrap(True)
         audio_help_label.setStyleSheet("color: #cccccc; margin: 5px; font-size: 11px;")
         audio_format_layout.addWidget(audio_help_label)
+
+        self.increase_audio_volume_checkbox = QCheckBox(_("settings.increase_audio_volume"))
+        self.increase_audio_volume_checkbox.setChecked(self.increase_audio_volume_enabled)
+        audio_format_layout.addWidget(self.increase_audio_volume_checkbox)
+
+        volume_help_label = QLabel(_("settings.increase_audio_volume_help"))
+        volume_help_label.setWordWrap(True)
+        volume_help_label.setStyleSheet("color: #cccccc; margin: 5px; font-size: 11px;")
+        audio_format_layout.addWidget(volume_help_label)
 
         audio_format_group_box.setLayout(audio_format_layout)
         layout.addWidget(audio_format_group_box)
@@ -363,6 +373,10 @@ class DownloadSettingsDialog(QDialog):
         audio_format_map = {0: "best", 1: "aac", 2: "mp3", 3: "flac", 4: "wav", 5: "opus", 6: "m4a", 7: "vorbis"}
         return audio_format_map.get(self.audio_format_combo.currentIndex(), "best")
 
+    def get_increase_audio_volume_enabled(self) -> bool:
+        """Returns whether audio loudness boost is enabled."""
+        return self.increase_audio_volume_checkbox.isChecked()
+
     def get_filename_format(self) -> str:
         """Returns the filename format string."""
         return self.filename_format_input.text().strip()
@@ -416,6 +430,7 @@ class DownloadSettingsDialog(QDialog):
             preferred_audio_format = self.get_preferred_audio_format()
             ConfigManager.set("force_audio_format", force_audio_format)
             ConfigManager.set("preferred_audio_format", preferred_audio_format)
+            ConfigManager.set("increase_audio_volume", self.get_increase_audio_volume_enabled())
 
             # Save filename format
             filename_format = self.get_filename_format()

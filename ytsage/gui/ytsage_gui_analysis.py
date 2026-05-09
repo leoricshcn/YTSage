@@ -112,7 +112,7 @@ class AnalysisThread(QThread):
         self.progress_update.emit(30)  # This will trigger fake progress in UI
 
         # Build command for basic info extraction
-        cmd = [yt_dlp_path, "--dump-single-json", "--flat-playlist", "--no-warnings", url]
+        cmd = [yt_dlp_path, "--ignore-config", "--dump-single-json", "--flat-playlist", "--no-warnings", url]
         self._add_auth_options(cmd)
 
         logger.debug(f"Executing yt-dlp command: {cmd}")
@@ -192,7 +192,7 @@ class AnalysisThread(QThread):
             first_video_entry = playlist_entries[0]
             first_video_url = first_video_entry.get("url")
 
-            cmd_single = [yt_dlp_path, "--dump-single-json", "--no-warnings", first_video_url]
+            cmd_single = [yt_dlp_path, "--ignore-config", "--dump-single-json", "--no-warnings", first_video_url]
             self._add_auth_options(cmd_single)
 
             try:

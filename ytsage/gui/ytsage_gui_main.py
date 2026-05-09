@@ -257,6 +257,7 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
         self.preferred_output_format = ConfigManager.get("preferred_output_format") or "mp4"
         self.force_audio_format = ConfigManager.get("force_audio_format") or False
         self.preferred_audio_format = ConfigManager.get("preferred_audio_format") or "best"
+        self.increase_audio_volume = ConfigManager.get("increase_audio_volume") or False
         # Track if video analysis is completed
         self.analysis_completed = False
 
@@ -624,12 +625,21 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
             # Update Audio Format Settings
             new_force_audio_format = dialog.get_force_audio_format_enabled()
             new_preferred_audio_format = dialog.get_preferred_audio_format()
+            new_increase_audio_volume = dialog.get_increase_audio_volume_enabled()
             audio_format_changed = False
-            if new_force_audio_format != self.force_audio_format or new_preferred_audio_format != self.preferred_audio_format:
+            if (
+                new_force_audio_format != self.force_audio_format
+                or new_preferred_audio_format != self.preferred_audio_format
+                or new_increase_audio_volume != self.increase_audio_volume
+            ):
                 self.force_audio_format = new_force_audio_format
                 self.preferred_audio_format = new_preferred_audio_format
+                self.increase_audio_volume = new_increase_audio_volume
                 audio_format_changed = True
-                logger.info(f"Audio format settings updated - Force: {self.force_audio_format}, Preferred: {self.preferred_audio_format}")
+                logger.info(
+                    f"Audio format settings updated - Force: {self.force_audio_format}, "
+                    f"Preferred: {self.preferred_audio_format}, Increase loudness: {self.increase_audio_volume}"
+                )
 
             # Update Tooltip if anything changed
             if path_changed or limit_changed or format_changed or audio_format_changed:
@@ -762,6 +772,7 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
             preferred_output_format=self.preferred_output_format,  # Pass preferred format
             force_audio_format=self.force_audio_format,  # Pass force audio format setting
             preferred_audio_format=self.preferred_audio_format,  # Pass preferred audio format
+            increase_audio_volume=self.increase_audio_volume,  # Pass audio loudness boost setting
             filename_format=filename_format,  # Pass the filename format
         )
 
@@ -1757,5 +1768,4 @@ class YTSageApp(QMainWindow, FormatTableMixin, VideoInfoMixin, AnalysisMixin):  
             painter.drawRect(source_pixmap.rect())
 
         return result
-
 

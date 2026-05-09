@@ -1,18 +1,23 @@
 import gc
+import json
 import os
 import re
+import requests
 import shlex  # For safely parsing command arguments
 import signal
 import subprocess  # For direct CLI command execution
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional, List, Set
 
 from PySide6.QtCore import QObject, QThread, Signal
 
+from .ytsage_ffmpeg import get_ffmpeg_path
 from .ytsage_yt_dlp import get_yt_dlp_path
 from ..utils.ytsage_constants import (
+    APP_DATA_DIR,
     SUBPROCESS_CREATIONFLAGS,
     VIDEO_EXTENSIONS,
     AUDIO_EXTENSIONS,
@@ -38,6 +43,14 @@ class SignalManager(QObject):
 
 
 class DownloadThread(QThread):
+    VOICE_TARGET_I = "-10"
+    VOICE_TARGET_LRA = "5"
+    VOICE_TARGET_TP = "-0.5"
+    POST_NORMALIZATION_GAIN = "volume=8dB"
+    AUDIO_LIMITER_FILTER = "alimiter=limit=0.99"
+    ARNNDN_MODEL_URL = "https://raw.githubusercontent.com/richardpl/arnndn-models/master/sh.rnnn"
+    ARNNDN_MODEL_PATH = APP_DATA_DIR / "models" / "sh.rnnn"
+
     progress_signal = Signal(float)
     status_signal = Signal(str)
     finished_signal = Signal()
@@ -72,6 +85,7 @@ class DownloadThread(QThread):
         preferred_output_format="mp4",
         force_audio_format=False,
         preferred_audio_format="best",
+        increase_audio_volume=False,
         filename_format=None,
     ) -> None:
         super().__init__()
@@ -100,6 +114,7 @@ class DownloadThread(QThread):
         self.preferred_output_format = preferred_output_format
         self.force_audio_format = force_audio_format
         self.preferred_audio_format = preferred_audio_format
+        self.increase_audio_volume = increase_audio_volume
         self.filename_format = filename_format
         self.paused: bool = False
         self.cancelled: bool = False
@@ -108,6 +123,7 @@ class DownloadThread(QThread):
         self.last_file_path: Optional[str] = None  # Initialize full file path storage
         self.subtitle_files: List[str] = []  # Track subtitle files that are created
         self.initial_subtitle_files: Set[Path] = set()  # Track initial subtitle files before download
+        self.download_started_at: float = 0.0
 
     def cleanup_partial_files(self) -> None:
         """Delete any partial files including .part and unmerged format-specific files"""
@@ -229,7 +245,7 @@ class DownloadThread(QThread):
         """Build the yt-dlp command line with all options for direct execution."""
         # Use the new yt-dlp path function from ytsage_yt_dlp module
         yt_dlp_path: str = get_yt_dlp_path()
-        cmd: List[str] = [yt_dlp_path]
+        cmd: List[str] = [yt_dlp_path, "--ignore-config"]
         logger.debug(f"Using yt-dlp from: {yt_dlp_path}")
 
         # Format selection strategy - use format ID if provided or fallback to resolution
@@ -363,9 +379,202 @@ class DownloadThread(QThread):
 
         return cmd
 
+    def _collect_recent_audio_files(self, grace_seconds: float = 5.0) -> List[Path]:
+        """Find audio files produced by the current download session."""
+        threshold = self.download_started_at - grace_seconds
+        audio_files: List[Path] = []
+
+        try:
+            for file_path in self.path.rglob("*"):
+                if not file_path.is_file() or file_path.suffix.lower() not in AUDIO_EXTENSIONS:
+                    continue
+
+                try:
+                    if file_path.stat().st_mtime >= threshold:
+                        audio_files.append(file_path)
+                except OSError as e:
+                    logger.debug(f"Could not stat audio file {file_path}: {e}")
+        except Exception as e:
+            logger.exception(f"Error collecting recent audio files: {e}")
+
+        audio_files.sort(key=lambda candidate: candidate.stat().st_mtime)
+        return audio_files
+
+    def _escape_filter_path(self, path: Path) -> str:
+        """Escape a filesystem path for use inside an FFmpeg filter string."""
+        escaped = path.resolve().as_posix()
+        escaped = escaped.replace("\\", "/")
+        escaped = escaped.replace(":", r"\:")
+        escaped = escaped.replace("'", r"\'")
+        escaped = escaped.replace(",", r"\,")
+        escaped = escaped.replace("[", r"\[")
+        escaped = escaped.replace("]", r"\]")
+        return escaped
+
+    def _ffmpeg_supports_filter(self, ffmpeg_path: str, filter_name: str, run_kwargs: dict) -> bool:
+        """Check whether the current FFmpeg build includes a given audio filter."""
+        try:
+            result = subprocess.run(
+                [ffmpeg_path, "-hide_banner", "-filters"],
+                check=False,
+                timeout=15,
+                **run_kwargs,
+            )
+            output = f"{result.stdout or ''}\n{result.stderr or ''}"
+            return re.search(rf"\b{re.escape(filter_name)}\b", output) is not None
+        except Exception as e:
+            logger.debug(f"Could not detect FFmpeg filter support for {filter_name}: {e}")
+            return False
+
+    def _ensure_arnndn_model(self) -> Path | None:
+        """Download the speech denoise model on first use."""
+        try:
+            if self.ARNNDN_MODEL_PATH.exists() and self.ARNNDN_MODEL_PATH.stat().st_size > 0:
+                return self.ARNNDN_MODEL_PATH
+
+            self.ARNNDN_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Downloading arnndn speech model to {self.ARNNDN_MODEL_PATH}")
+            response = requests.get(self.ARNNDN_MODEL_URL, timeout=60)
+            response.raise_for_status()
+            self.ARNNDN_MODEL_PATH.write_bytes(response.content)
+            return self.ARNNDN_MODEL_PATH
+        except Exception as e:
+            logger.warning(f"Failed to download arnndn model: {e}")
+            return None
+
+    def _build_voice_cleanup_filter(self, ffmpeg_path: str, run_kwargs: dict) -> str:
+        """Build the best available speech denoise filter chain for FFmpeg."""
+        if self._ffmpeg_supports_filter(ffmpeg_path, "arnndn", run_kwargs):
+            model_path = self._ensure_arnndn_model()
+            if model_path:
+                escaped_model_path = self._escape_filter_path(model_path)
+                return f"highpass=f=90,arnndn=m='{escaped_model_path}'"
+
+        if self._ffmpeg_supports_filter(ffmpeg_path, "anlmdn", run_kwargs):
+            return "highpass=f=90,anlmdn=strength=0.02"
+
+        if self._ffmpeg_supports_filter(ffmpeg_path, "afftdn", run_kwargs):
+            return "highpass=f=90,afftdn=nf=-30"
+
+        return "highpass=f=90"
+
+    def _increase_audio_loudness(self) -> bool:
+        """Normalize audio loudness with two-pass voice tuning and limit peaks."""
+        if not self.is_audio_only or not self.increase_audio_volume or self.cancelled:
+            return True
+
+        recent_audio_files = self._collect_recent_audio_files()
+        if not recent_audio_files:
+            logger.warning("Audio normalization was enabled, but no recent audio files were found")
+            return True
+
+        ffmpeg_path = str(get_ffmpeg_path())
+
+        for audio_file in recent_audio_files:
+            if self.cancelled:
+                return False
+
+            self.status_signal.emit(_("download.boosting_audio"))
+            logger.info(f"Applying loudness normalization for {audio_file}")
+
+            fd, temp_output = tempfile.mkstemp(
+                prefix=f"{audio_file.stem}_loudness_",
+                suffix=audio_file.suffix,
+                dir=str(audio_file.parent),
+            )
+            os.close(fd)
+            temp_output_path = Path(temp_output)
+
+            run_kwargs = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+                "text": True,
+            }
+            if sys.platform == "win32":
+                run_kwargs["creationflags"] = SUBPROCESS_CREATIONFLAGS
+
+            try:
+                voice_cleanup_filter = self._build_voice_cleanup_filter(ffmpeg_path, run_kwargs)
+
+                analysis_cmd = [
+                    ffmpeg_path,
+                    "-i",
+                    str(audio_file),
+                    "-vn",
+                    "-af",
+                    (
+                        f"{voice_cleanup_filter},"
+                        "loudnorm="
+                        f"I={self.VOICE_TARGET_I}:"
+                        f"LRA={self.VOICE_TARGET_LRA}:"
+                        f"TP={self.VOICE_TARGET_TP}:"
+                        "print_format=json"
+                    ),
+                    "-f",
+                    "null",
+                    "-",
+                ]
+                analysis_result = subprocess.run(analysis_cmd, check=False, **run_kwargs)
+                if analysis_result.returncode != 0:
+                    temp_output_path.unlink(missing_ok=True)
+                    error_output = (analysis_result.stderr or analysis_result.stdout or "").strip()
+                    raise RuntimeError(error_output or "FFmpeg loudnorm analysis failed")
+
+                stderr_output = analysis_result.stderr or ""
+                json_match = re.search(r"\{\s*\"input_i\"[\s\S]*?\}", stderr_output)
+                if not json_match:
+                    temp_output_path.unlink(missing_ok=True)
+                    raise RuntimeError("Could not parse loudnorm analysis output")
+
+                loudnorm_stats = json.loads(json_match.group(0))
+
+                normalization_filter = (
+                    "loudnorm="
+                    f"I={self.VOICE_TARGET_I}:"
+                    f"LRA={self.VOICE_TARGET_LRA}:"
+                    f"TP={self.VOICE_TARGET_TP}:"
+                    f"measured_I={loudnorm_stats['input_i']}:"
+                    f"measured_LRA={loudnorm_stats['input_lra']}:"
+                    f"measured_TP={loudnorm_stats['input_tp']}:"
+                    f"measured_thresh={loudnorm_stats['input_thresh']}:"
+                    f"offset={loudnorm_stats['target_offset']}:"
+                    "linear=true:"
+                    "print_format=summary"
+                )
+
+                ffmpeg_cmd = [
+                    ffmpeg_path,
+                    "-y",
+                    "-i",
+                    str(audio_file),
+                    "-map_metadata",
+                    "0",
+                    "-vn",
+                    "-filter:a",
+                    f"{voice_cleanup_filter},{normalization_filter},{self.POST_NORMALIZATION_GAIN},{self.AUDIO_LIMITER_FILTER}",
+                    str(temp_output_path),
+                ]
+
+                result = subprocess.run(ffmpeg_cmd, check=False, **run_kwargs)
+                if result.returncode != 0:
+                    temp_output_path.unlink(missing_ok=True)
+                    error_output = (result.stderr or result.stdout or "").strip()
+                    raise RuntimeError(error_output or "FFmpeg returned a non-zero exit code")
+
+                temp_output_path.replace(audio_file)
+                self.current_filename = audio_file.name
+                self.last_file_path = str(audio_file)
+            except Exception as e:
+                logger.exception(f"Failed to normalize audio for {audio_file}: {e}")
+                self.error_signal.emit(f"Failed to normalize audio: {e}")
+                return False
+
+        return True
+
     def run(self) -> None:
         try:
             logger.debug("Starting download thread")
+            self.download_started_at = time.time()
 
             # Get initial list of subtitle files to compare later
             self.initial_subtitle_files = set()
@@ -499,6 +708,9 @@ class DownloadThread(QThread):
                 
                 # Set completion status
                 self.status_signal.emit(_("download.completed"))
+
+                if not self._increase_audio_loudness() or self.cancelled:
+                    return
                 
                 # Clean up subtitle files if they were merged, with a small delay
                 # to ensure the embedding process has completed
